@@ -1,86 +1,15 @@
 //use std::io;
 use std::collections::HashMap;
 use std::env;
-use std::fmt;
-use std::fs::File;
+use std::fs;
 use std::io::prelude::*;
 use std::path::Path;
-use std::time::SystemTime;
 
-use chrono::format;
-use chrono::{offset, DateTime, Local, NaiveDateTime, TimeZone, Utc};
+use chrono::DateTime;
 
-#[derive(Debug)]
-struct Entry {
-    id: usize,
-    group: String,
-    date: isize,
-    desc: String,
-}
-
-impl Entry {
-    fn from_entry_line(line: &str) -> Self {
-        let items: Vec<&str> = line.split(',').collect();
-
-        let id = items[0].parse::<usize>().unwrap();
-        let group = items[1].to_owned();
-        let date = items[2].parse::<isize>().unwrap();
-        let desc = items[3].to_owned();
-
-        Entry {
-            id: id,
-            group: group,
-            date: date,
-            desc: desc,
-        }
-    }
-    fn from_elements(id: usize, group: &String, date: isize, desc: &String) -> Self {
-        Entry {
-            id: id,
-            group: group.to_owned(),
-            date: date,
-            desc: desc.to_owned(),
-        }
-    }
-    fn update_values(&mut self, keyvals: &HashMap<String, String>) {
-        for (k, v) in keyvals.iter() {
-            match k.as_str() {
-                "id" => self.id = v.parse::<usize>().unwrap(),
-                "group" => self.group = v.to_owned(),
-                "date" => { 
-                    let mut x = v.to_owned();
-                    x.push_str(TZ);
-                    self.date = DateTime::parse_from_str(&x, "%m/%d/%Y %I:%M %P%z").unwrap().timestamp() as isize;
-                },
-                "desc" => self.desc = v.to_owned(),
-
-                _ => {},
-            }
-        }
-    }
-}
-
-// Format for dates: Sun(%a) Sep(%b) 12(%d) 12:30 PM(%I:%M %p)
-const TIME_FMT: &str = "%a %b %d %I:%M %p";
-// TODO: Please find a solution for this hack
-const TZ: &str = "-0400";
-
-impl fmt::Display for Entry {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let l: DateTime<Local> = Local.timestamp(self.date as i64, 0);
-        let t = l.format(TIME_FMT);
-        write!(f, "[{}] Due: {}, {}", self.id, t, self.desc)
-    }
-}
-
-fn expand_tilde() -> String {
-    env::var("HOME").expect("Couldn't grab home var")
-}
-
-fn time_since_epoch() -> u64 {
-    let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH);
-    now.expect("Time error!").as_secs()
-}
+mod util;
+mod entry;
+use entry::Entry;
 
 const KEYWORDS: [&str; 3] = ["group", "desc", "date"];
 
@@ -120,7 +49,7 @@ fn parse_mod_args(args: &Vec<String>) -> HashMap<String, String> {
         if res.contains_key("date") {
             // Verify that date string can be converted to DateTime
             let mut x = res["date"].to_owned();
-            x.push_str(TZ);
+            x.push_str(entry::TZ);
             DateTime::parse_from_str(&x, "%m/%d/%Y %I:%M %P%z").unwrap();
         }
 
@@ -130,21 +59,12 @@ fn parse_mod_args(args: &Vec<String>) -> HashMap<String, String> {
     res
 }
 
-fn highest_entry_id(entries: &Vec<Entry>) -> usize {
-    let mut highest: usize = 0;
-    for entry in entries.iter() {
-        if entry.id > highest {
-            highest = entry.id;
-        }
-    }
-    highest
-}
-
 #[derive(Debug)]
 enum Command {
     Add(String, String, String),
     Mod(usize, HashMap<String, String>),
     Del(usize),
+    List,
     Unknown,
 }
 
@@ -172,11 +92,27 @@ fn main() {
     // Handle args (skip program path)
     let args: Vec<String> = env::args().skip(1).collect();
 
+    if args.len() == 1 {
+        // print usage
+        // and return
+    }
+
     let command = match args[0].as_str() {
+
+        "list" => {
+            Command::List
+        }
+
+        // add "group" "date" "desc"
         "add" => {
-            Command::Add(args[1].to_owned(), args[2].to_owned(), args[3].to_owned())
-        },
-        // mod id param=val
+            let group = args[1].to_owned();
+            let date = args[2].to_owned();
+            let desc = args[3].to_owned();
+            Command::Add(group, date, desc)
+            //Command::Add(args[1].to_owned(), args[2].to_owned(), args[3].to_owned())
+        }
+
+        // mod id {param=val}+
         "mod" => {
             if let Ok(id) = args[1].parse::<usize>() {
                 Command::Mod(id, parse_mod_args(&args))
@@ -184,6 +120,7 @@ fn main() {
                 panic!("Invalid id: {}", args[1]);
             }
         }
+
         // del id
         "del" => {
             if args.len() < 2 {
@@ -200,21 +137,25 @@ fn main() {
     };
 
     // Grab the path
-    let expanded_path = expand_tilde() + "/.ctodocache";
+    let expanded_path = util::expand_tilde() + "/.ctodocache";
     let path = Path::new(&expanded_path);
     let display = path.display();
 
     // Open the file
-    let mut file = match File::open(&path) {
-        Err(why) => panic!("Couldn't open {}: {}", display, why),
+    let mut file = match fs::File::open(&path) {
+        Err(why) => {
+            // TODO: make the file!
+            panic!("Couldn't open {}: {}", display, why)
+        }
         Ok(file) => file,
     };
+    
 
     // Read file into a buffer (and grab byte len)
     let mut s = String::new();
     let nbytes = file.read_to_string(&mut s);
 
-    let mut lines: Vec<&str> = s.lines().collect();
+    let lines: Vec<&str> = s.lines().collect();
 
     // Grab all the entries
     let mut entries: Vec<Entry> = Vec::new();
@@ -224,13 +165,16 @@ fn main() {
     }
 
     
-
+    let mut just_list = false;
     // Handle commands here!
     match command {
+        Command::List => {
+            just_list = true;
+        }
         Command::Add(group, date, desc) => {
-            let highest = highest_entry_id(&entries);
+            let highest = entry::highest_entry_id(&entries);
             let mut with_tz = date.to_owned();
-            with_tz.push_str(TZ);
+            with_tz.push_str(entry::TZ);
             let res = Entry::from_elements(
                     highest + 1, 
                     &group, 
@@ -273,13 +217,27 @@ fn main() {
     }
 
     // Print all entries for each group
-    for group in groups.iter() {
-        println!("{}:", group);
-        for entry in entries.iter() {
-            if *group == entry.group {
-                println!("{}", entry);
+    if just_list {
+        for group in groups.iter() {
+            println!("{}:", group);
+            for entry in entries.iter() {
+                if *group == entry.group {
+                    println!("{}", entry);
+                }
             }
+            println!("");
         }
-        println!("");
     }
+
+    // Empty the file
+    let mut file = fs::File::create(&path).unwrap();
+
+    // Write new entries to file
+    let contents_vec: Vec<String> = entries
+        .iter()
+        .map(|e| { e.as_file_line() })
+        .collect();
+    let contents = contents_vec.join("\n");
+
+    file.write_all(contents.as_bytes());
 }
