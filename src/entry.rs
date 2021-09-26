@@ -1,11 +1,11 @@
-use std::collections::HashMap;
 use std::fmt;
+use std::collections::HashMap;
 
 use chrono::format;
 use chrono::{offset, DateTime, Local, NaiveDateTime, TimeZone, Utc};
 
-// Format for dates: Sun(%a) Sep(%b) 12(%d) 12:30 PM(%I:%M %p)
-pub const TIME_FMT: &str = "%a %b %d %I:%M %p";
+use crate::config;
+
 // TODO: Please find a solution for this hack
 pub const TZ: &str = "-0400";
 
@@ -19,6 +19,8 @@ pub struct Entry {
 
 impl Entry {
 
+    // Construct an entry from a line stored in .todocache
+    // TODO: line.split(',') will not work if Group or Desc have a ',' in them
     pub fn from_entry_line(line: &str) -> Self {
         let items: Vec<&str> = line.split(',').collect();
 
@@ -35,6 +37,8 @@ impl Entry {
         }
     }
 
+    // Construct an entry from 'add' command, uses highest available ID as ID
+    // e.g: todo add "group" "9/21/2021 11:59 pm" "description goes here"
     pub fn from_elements(id: usize, group: &String, date: isize, desc: &String) -> Self {
         Entry {
             id: id,
@@ -44,6 +48,7 @@ impl Entry {
         }
     }
 
+    // Update the values of a 'mod' command
     pub fn update_values(&mut self, keyvals: &HashMap<String, String>) {
         for (k, v) in keyvals.iter() {
             match k.as_str() {
@@ -61,7 +66,8 @@ impl Entry {
         }
     }
 
-    //1,cs288,1631684966,this is the 1 desc
+    // Return the ~/.todocache line representation of an entry
+    // 1,cs288,1631684966,this is the 1 desc
     pub fn as_file_line(&self) -> String {
         let mut res = String::new();
 
@@ -78,15 +84,49 @@ impl Entry {
 
         res
     }
-}
 
-impl fmt::Display for Entry {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    // %n: id
+    // %t: date
+    // %s: desc
+    pub fn print(&self, cfg: &config::Config) {
         let l: DateTime<Local> = Local.timestamp(self.date as i64, 0);
-        let t = l.format(TIME_FMT);
-        write!(f, "[{}] Due: {}, {}", self.id, t, self.desc)
+        let t = l.format(cfg.time_fmt.as_str());
+
+        // Parse cfg's print_fmt
+        let mut in_specifier = false;
+        //let mut in_escape = false;
+        for ch in cfg.print_fmt.chars() {
+            if in_specifier {
+                match ch {
+                    'n' => {
+                        print!("{}", self.id);
+                    },
+                    't' => {
+                        print!("{}", t);
+                    },
+                    's' => {
+                        print!("{}", self.desc);
+                    },
+                    _ => {
+                        panic!("Bad print_fmt: {}", cfg.print_fmt);
+                    },
+                }
+                in_specifier = false;
+            } else {
+                // if ch == '\\' {
+                //     in_escape = true;
+                // } else 
+                if ch == '%' {
+                    in_specifier = true;
+                } else {
+                    print!("{}", ch);
+                }
+            }
+        }
+        println!("")
     }
 }
+
 
 pub fn highest_entry_id(entries: &Vec<Entry>) -> usize {
     let mut highest: usize = 0;

@@ -7,8 +7,10 @@ use std::path::Path;
 
 use chrono::DateTime;
 
-mod util;
+mod config;
 mod entry;
+mod util;
+
 use entry::Entry;
 
 const KEYWORDS: [&str; 3] = ["group", "desc", "date"];
@@ -68,6 +70,10 @@ enum Command {
     Unknown,
 }
 
+fn usage() {
+    println!("Usage: todo [command] [args]");
+}
+
 /*
  * Format of .todocache:
  * Line 1: <id>,<group>,<due date>,<desc>\n
@@ -92,9 +98,9 @@ fn main() {
     // Handle args (skip program path)
     let args: Vec<String> = env::args().skip(1).collect();
 
-    if args.len() == 1 {
-        // print usage
-        // and return
+    if args.len() == 0 {
+        usage();
+        return;
     }
 
     let command = match args[0].as_str() {
@@ -137,7 +143,7 @@ fn main() {
     };
 
     // Grab the path
-    let expanded_path = util::expand_tilde() + "/.ctodocache";
+    let expanded_path = util::expand_tilde() + "/.todocache";
     let path = Path::new(&expanded_path);
     let display = path.display();
 
@@ -149,7 +155,10 @@ fn main() {
         }
         Ok(file) => file,
     };
-    
+
+    // Configuration
+    let mut cfg = config::Config::new();
+    cfg.print_fmt = "BOOBS%sBOOBS".to_owned();
 
     // Read file into a buffer (and grab byte len)
     let mut s = String::new();
@@ -165,8 +174,8 @@ fn main() {
     }
 
     
-    let mut just_list = false;
     // Handle commands here!
+    let mut just_list = false;
     match command {
         Command::List => {
             just_list = true;
@@ -199,7 +208,8 @@ fn main() {
                 .find(|(i, e)| e.id == id)
                 .unwrap(); // Error handle here
 
-            println!("Deleting entry: {}", &entries[id_index]);
+            print!("Deleting entry: ");
+            &entries[id_index].print(&cfg);
             entries.remove(id_index);
         }
         Command::Unknown => {
@@ -222,11 +232,12 @@ fn main() {
             println!("{}:", group);
             for entry in entries.iter() {
                 if *group == entry.group {
-                    println!("{}", entry);
+                    entry.print(&cfg);
                 }
             }
             println!("");
         }
+        return;
     }
 
     // Empty the file
