@@ -20,11 +20,6 @@ const KEYWORDS: [&str; 3] = ["group", "desc", "date"];
 fn parse_mod_args(args: &Vec<String>) -> HashMap<String, String> {
     let mut res: HashMap<String, String> = HashMap::new();
 
-    let input_to_key_val = |item: &String| {
-        let x: Vec<&str> = item.split('=').collect();
-        (x[0].to_owned(), x[1].to_owned())
-    };
-
     // skip 'mod' and 'id'
     for item in args.into_iter().skip(2) {
         // Make sure only one '='
@@ -157,8 +152,8 @@ fn main() {
     };
 
     // Configuration
-    let mut cfg = config::Config::new();
-    cfg.print_fmt = "BOOBS%sBOOBS".to_owned();
+    let mut cfg = config::Config::default();
+    cfg.print_fmt = "ID: %n TIME: %t DESC: %s".to_owned();
 
     // Read file into a buffer (and grab byte len)
     let mut s = String::new();
