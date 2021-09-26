@@ -93,7 +93,7 @@ impl Entry {
         let t = l.format(cfg.time_fmt.as_str());
 
         // Parse cfg's print_fmt
-        let mut in_specifier = false;
+        let mut in_specifier = false; // ch was '%', next is specifier
         //let mut in_escape = false;
         for ch in cfg.print_fmt.chars() {
             if in_specifier {
@@ -113,9 +113,6 @@ impl Entry {
                 }
                 in_specifier = false;
             } else {
-                // if ch == '\\' {
-                //     in_escape = true;
-                // } else 
                 if ch == '%' {
                     in_specifier = true;
                 } else {

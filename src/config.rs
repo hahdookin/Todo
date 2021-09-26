@@ -13,7 +13,7 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn new() -> Self {
+    pub fn default() -> Self {
         Config {
             time_fmt: TIME_FMT.to_owned(),
             print_fmt: PRINT_FMT.to_owned(),
