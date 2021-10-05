@@ -6,6 +6,7 @@ use std::io::prelude::*;
 use std::path::Path;
 
 use chrono::DateTime;
+use termion::color;
 
 mod config;
 mod entry;
@@ -59,14 +60,29 @@ fn parse_mod_args(args: &Vec<String>) -> HashMap<String, String> {
 #[derive(Debug)]
 enum Command {
     Add(String, String, String),
+    //Add{ group: String, date_str: String, desc: String },
     Mod(usize, HashMap<String, String>),
     Del(usize),
     List,
+    Reindex,
     Unknown,
 }
 
 fn usage() {
-    println!("Usage: todo [command] [args]");
+    println!("USAGE:");
+    println!("    todo [command] [args]");
+    println!("");
+    println!("OPTIONS:");
+    println!("    -s    Sort entries by due date");
+    println!("");
+    println!("COMMANDS:");
+    println!("    list, ls    List entries");
+    println!("    add         Add an entry");
+    println!("    mod         Modify an entry");
+    println!("    del, rm     Remove an entry");
+    println!("    reindex     Reindex existing entry IDs");
+    println!("");
+
 }
 
 /*
@@ -100,7 +116,7 @@ fn main() {
 
     let command = match args[0].as_str() {
 
-        "list" => {
+        "list" | "ls" => {
             Command::List
         }
 
@@ -110,6 +126,7 @@ fn main() {
             let date = args[2].to_owned();
             let desc = args[3].to_owned();
             Command::Add(group, date, desc)
+            //Command::Add { group: group, date_str: date, desc: desc, }
             //Command::Add(args[1].to_owned(), args[2].to_owned(), args[3].to_owned())
         }
 
@@ -123,7 +140,7 @@ fn main() {
         }
 
         // del id
-        "del" => {
+        "del" | "rm" => {
             if args.len() < 2 {
                 panic!("No id given for del");
             }
@@ -132,6 +149,10 @@ fn main() {
             } else {
                 panic!("Invalid id: {}", args[1]);
             }
+        }
+
+        "reindex" => {
+            Command::Reindex
         }
 
         _ => Command::Unknown,
@@ -153,18 +174,18 @@ fn main() {
 
     // Configuration
     let mut cfg = config::Config::default();
-    cfg.print_fmt = "ID: %n TIME: %t DESC: %s".to_owned();
+    cfg.ignore_group_case = true; // TODO: Implement this setting
 
     // Read file into a buffer (and grab byte len)
     let mut s = String::new();
-    let nbytes = file.read_to_string(&mut s);
+    let _nbytes = file.read_to_string(&mut s);
 
     let lines: Vec<&str> = s.lines().collect();
 
     // Grab all the entries
     let mut entries: Vec<Entry> = Vec::new();
     for line in lines {
-        let entry = Entry::from_entry_line(line);
+        let entry = Entry::from_entry_line(line, &cfg);
         entries.push(entry);
     }
 
@@ -172,43 +193,50 @@ fn main() {
     // Handle commands here!
     let mut just_list = false;
     match command {
-        Command::List => {
-            just_list = true;
-        }
         Command::Add(group, date, desc) => {
             let highest = entry::highest_entry_id(&entries);
             let mut with_tz = date.to_owned();
             with_tz.push_str(entry::TZ);
             let res = Entry::from_elements(
                     highest + 1, 
-                    &group, 
+                    group, 
                     DateTime::parse_from_str(&with_tz, "%m/%d/%Y %I:%M %P%z").unwrap().timestamp() as isize,
-                    &desc
+                    desc
                 );
+            print!("Adding entry: ");
+            res.print(&cfg);
             entries.push(res);
         }
         Command::Mod(id, newvals) => {
-            let (id_index, _) = entries
+            let id_index = entries
                 .iter()
-                .enumerate()
-                .find(|(i, e)| e.id == id)
-                .unwrap();
-                
+                .position(|e| e.id == id)
+                .expect("No entry with index"); // Error handle here
+   
+            print!("Updating entry: ");
+            entries[id_index].print(&cfg);
             entries[id_index].update_values(&newvals);
+            print!("Updated: ");
+            entries[id_index].print(&cfg);
         }
         Command::Del(id) => {
-            let (id_index, _) = entries
+            let id_index = entries
                 .iter()
-                .enumerate()
-                .find(|(i, e)| e.id == id)
-                .unwrap(); // Error handle here
+                .position(|e| e.id == id)
+                .expect("No entry with index"); // Error handle here
 
             print!("Deleting entry: ");
-            &entries[id_index].print(&cfg);
+            entries[id_index].print(&cfg);
             entries.remove(id_index);
         }
+        Command::List => {
+            just_list = true;
+        }
+        Command::Reindex => {
+            // TODO: Implement this
+        }
         Command::Unknown => {
-            // Print usage
+            // TODO: Print usage
         }
     };
 
@@ -223,14 +251,37 @@ fn main() {
 
     // Print all entries for each group
     if just_list {
-        for group in groups.iter() {
-            println!("{}:", group);
-            for entry in entries.iter() {
-                if *group == entry.group {
-                    entry.print(&cfg);
+        use chrono::{Local, TimeZone};
+        let now = Local::now().timestamp() as i64; // Now in seconds from epoch
+        let l: DateTime<Local> = Local.timestamp(now, 0); // Now as DateTime
+        let t = l.format(cfg.time_fmt.as_str()); // Now as Str rep
+        print!("Today is: ");
+        print!("{}", color::LightCyan.fg_str());
+        println!("{}", t);
+        print!("{}", color::LightWhite.fg_str());
+
+        let sort = true;
+        if sort {
+            entries.sort_by(|a, b| {
+                (now - b.date as i64).cmp(&(now - a.date as i64))
+            });
+            for e in entries {
+                print!("{}", cfg.group_color);
+                print!("{}: ", e.group);
+                print!("{}", color::LightWhite.fg_str());
+                e.print(&cfg);
+            }
+        } else {
+            for group in groups.iter() {
+                print!("{}", cfg.group_color);
+                println!("{}:", group);
+                print!("{}", color::LightWhite.fg_str());
+                for entry in entries.iter() {
+                    if *group == entry.group {
+                        entry.print(&cfg);
+                    }
                 }
             }
-            println!("");
         }
         return;
     }
@@ -239,11 +290,11 @@ fn main() {
     let mut file = fs::File::create(&path).unwrap();
 
     // Write new entries to file
-    let contents_vec: Vec<String> = entries
+    let contents: Vec<String> = entries
         .iter()
         .map(|e| { e.as_file_line() })
         .collect();
-    let contents = contents_vec.join("\n");
+    let contents = contents.join("\n");
 
     file.write_all(contents.as_bytes());
 }
