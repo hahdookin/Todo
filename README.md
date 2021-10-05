@@ -18,7 +18,7 @@ Adding an entry:
 
 Listing all entries:
 
-`todo list` (or just `todo`)
+`todo ls` (or just `todo`)
 ```
 Homework:
 [0] Due: Sat Oct 23 11:59 PM: Programming project!
@@ -30,7 +30,7 @@ Modifying an entry:
 
 Removing an entry (task complete!):
 
-`todo del 0`
+`todo rm 0`
 
 ## Inspiration
 There were a few factors influencing me to take on this project:
