@@ -47,15 +47,15 @@ impl Entry {
     pub fn from_elements(id: usize, group: String, date: isize, desc: String) -> Self {
         Self {
             id: id,
-            // group: group.to_owned(),
             group: group,
             date: date,
-            // desc: desc.to_owned(),
             desc: desc,
         }
     }
 
     // Update the values of a 'mod' command
+    // where `keyvals` is a map of valid entry keys
+    // to valid entry values
     pub fn update_values(&mut self, keyvals: &HashMap<String, String>) {
         for (k, v) in keyvals.iter() {
             match k.as_str() {
@@ -73,7 +73,7 @@ impl Entry {
         }
     }
 
-    // Return the ~/.todocache line representation of an entry
+    // Return the ~/.todocache line representation of the entry
     // 1,cs288,1631684966,this is the 1 desc
     pub fn as_file_line(&self) -> String {
         let mut res = String::new();

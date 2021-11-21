@@ -7,7 +7,7 @@ Clone into a folder and run `cargo build`.
 Add path to `todo` to your env if you'd like.
 
 ## Usage
-`todo <command> [<args>]`
+`todo [command] [<args>]`
 
 Try `todo --help` for more.
 

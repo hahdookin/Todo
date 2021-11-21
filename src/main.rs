@@ -70,17 +70,18 @@ enum Command {
 
 fn usage() {
     println!("USAGE:");
-    println!("    todo [command] [args]");
+    println!("    todo <command> [<args>]");
     println!("");
     println!("OPTIONS:");
+    println!("  list:");
     println!("    -s    Sort entries by due date");
     println!("");
     println!("COMMANDS:");
-    println!("    list, ls    List entries");
-    println!("    add         Add an entry");
-    println!("    mod         Modify an entry");
-    println!("    del, rm     Remove an entry");
-    println!("    reindex     Reindex existing entry IDs");
+    println!("    l[ist], ls    List entries");
+    println!("    a[dd]         Add an entry");
+    println!("    m[od]         Modify an entry");
+    println!("    d[el], rm     Remove an entry");
+    println!("    reindex       Reindex existing entry IDs");
     println!("");
 
 }
@@ -107,31 +108,45 @@ fn usage() {
 //%a %b %d %I:%M %p
 fn main() {
     // Handle args (skip program path)
-    let args: Vec<String> = env::args().skip(1).collect();
+    let args: Vec<String> = env::args().skip(1).filter(|arg| arg.chars().nth(0).unwrap() != '-').collect();
 
+    // No commands, print usage
     if args.len() == 0 {
         usage();
         return;
     }
 
+    // Options
+    let mut sort = false;
+    for arg in env::args().skip(1) {
+        if arg.chars().nth(0).unwrap() == '-' {
+            match arg.chars().nth(1).unwrap() {
+                's' => {
+                    sort = true;
+                },
+                _ => {}
+            }
+        }
+    }
+
+    // Determine the command
     let command = match args[0].as_str() {
 
-        "list" | "ls" => {
+        // l[ist]|ls
+        "list" | "lis" | "li" | "l" | "ls" => {
             Command::List
         }
 
-        // add "group" "date" "desc"
-        "add" => {
+        // a[dd] "group" "date" "desc"
+        "add" | "ad" | "a" => {
             let group = args[1].to_owned();
             let date = args[2].to_owned();
             let desc = args[3].to_owned();
             Command::Add(group, date, desc)
-            //Command::Add { group: group, date_str: date, desc: desc, }
-            //Command::Add(args[1].to_owned(), args[2].to_owned(), args[3].to_owned())
         }
 
-        // mod id {param=val}+
-        "mod" => {
+        // m[od] id {param=val}+
+        "mod" | "mo" | "m" => {
             if let Ok(id) = args[1].parse::<usize>() {
                 Command::Mod(id, parse_mod_args(&args))
             } else {
@@ -139,8 +154,8 @@ fn main() {
             }
         }
 
-        // del id
-        "del" | "rm" => {
+        // d[el]|rm id
+        "del" | "de" | "d" | "rm" => {
             if args.len() < 2 {
                 panic!("No id given for del");
             }
@@ -188,11 +203,13 @@ fn main() {
         let entry = Entry::from_entry_line(line, &cfg);
         entries.push(entry);
     }
-
     
     // Handle commands here!
     let mut just_list = false;
+    let mut should_reindex = false;
+
     match command {
+
         Command::Add(group, date, desc) => {
             let highest = entry::highest_entry_id(&entries);
             let mut with_tz = date.to_owned();
@@ -207,6 +224,7 @@ fn main() {
             res.print(&cfg);
             entries.push(res);
         }
+
         Command::Mod(id, newvals) => {
             let id_index = entries
                 .iter()
@@ -219,6 +237,7 @@ fn main() {
             print!("Updated: ");
             entries[id_index].print(&cfg);
         }
+
         Command::Del(id) => {
             let id_index = entries
                 .iter()
@@ -229,14 +248,18 @@ fn main() {
             entries[id_index].print(&cfg);
             entries.remove(id_index);
         }
+
         Command::List => {
             just_list = true;
         }
+
         Command::Reindex => {
-            // TODO: Implement this
+            should_reindex = true;
         }
+
         Command::Unknown => {
-            // TODO: Print usage
+            usage();
+            return;
         }
     };
 
@@ -248,6 +271,18 @@ fn main() {
             groups.push(cur_group.to_owned());
         }
     }
+    
+    // Get longest group name
+    let max_group_name_len = groups.iter().map(|g| g.chars().count() ).max().unwrap();
+
+    // Reindex the entries starting from 0
+    if should_reindex {
+        let mut i = 0;
+        for entry in entries.iter_mut() {
+            entry.id = i;
+            i += 1;
+        }
+    }
 
     // Print all entries for each group
     if just_list {
@@ -255,23 +290,25 @@ fn main() {
         let now = Local::now().timestamp() as i64; // Now in seconds from epoch
         let l: DateTime<Local> = Local.timestamp(now, 0); // Now as DateTime
         let t = l.format(cfg.time_fmt.as_str()); // Now as Str rep
+
         print!("Today is: ");
         print!("{}", color::LightCyan.fg_str());
         println!("{}", t);
         print!("{}", color::LightWhite.fg_str());
 
-        let sort = true;
         if sort {
+            // Sorted print
             entries.sort_by(|a, b| {
                 (now - b.date as i64).cmp(&(now - a.date as i64))
             });
             for e in entries {
                 print!("{}", cfg.group_color);
                 print!("{}: ", e.group);
-                print!("{}", color::LightWhite.fg_str());
+                print!("{}\n", color::LightWhite.fg_str());
                 e.print(&cfg);
             }
         } else {
+            // Regular print
             for group in groups.iter() {
                 print!("{}", cfg.group_color);
                 println!("{}:", group);
