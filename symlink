@@ -1,7 +1,0 @@
-FN LEFT (br dwn): keycode 232, keysym 0x1008ff03, XF86MonBrightnessDown
-FN RIGHT (br up): keycode 233, keysym 0x1008ff02, XF86MonBrightnessUp
-
-FN UP (vol up): keycode 123, keysym 0x1008ff13, XF86AudioRaiseVolume
-FN DOWN (vol dwn): keycode 122, keysym 0x1008ff11, XF86AudioLowerVolume
-
-FN F8 (vol mute): keycode 121, keysym 0x1008ff12, XF86AudioMute
