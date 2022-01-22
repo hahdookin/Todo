@@ -273,7 +273,12 @@ fn main() {
     }
     
     // Get longest group name
-    let max_group_name_len = groups.iter().map(|g| g.chars().count() ).max().unwrap();
+    // let max_group_name_len = groups.iter().map(|g| g.chars().count() ).max();
+    // if let Some(x) = max_group_name_len {
+    //     let max_group_name_len = x;
+    // } else {
+    //     let max_group_name_len = 0;
+    // }
 
     // Reindex the entries starting from 0
     if should_reindex {
