@@ -62,7 +62,7 @@ enum Command {
     Add(String, String, String),
     //Add{ group: String, date_str: String, desc: String },
     Mod(usize, HashMap<String, String>),
-    Del(usize),
+    Del(Vec<usize>),
     List,
     Reindex,
     Unknown,
@@ -108,7 +108,10 @@ fn usage() {
 //%a %b %d %I:%M %p
 fn main() {
     // Handle args (skip program path)
-    let args: Vec<String> = env::args().skip(1).filter(|arg| arg.chars().nth(0).unwrap() != '-').collect();
+    let args: Vec<String> = env::args()
+                                    .skip(1)
+                                    .filter(|arg| arg.chars().nth(0).unwrap() != '-')
+                                    .collect();
 
     // No commands, print usage
     if args.len() == 0 {
@@ -159,11 +162,20 @@ fn main() {
             if args.len() < 2 {
                 panic!("No id given for del");
             }
-            if let Ok(id) = args[1].parse::<usize>() {
-                Command::Del(id)
-            } else {
-                panic!("Invalid id: {}", args[1]);
+            let mut ids = vec![];
+            for id in args.iter().skip(1) {
+                if let Ok(cur_id) = id.parse::<usize>() {
+                    ids.push(cur_id);
+                } else {
+                    panic!("Invalid id: {}", args[1]);
+                }
             }
+            Command::Del(ids)
+            // if let Ok(id) = args[1].parse::<usize>() {
+            //     Command::Del(id)
+            // } else {
+            //     panic!("Invalid id: {}", args[1]);
+            // }
         }
 
         "reindex" => {
@@ -238,15 +250,17 @@ fn main() {
             entries[id_index].print(&cfg);
         }
 
-        Command::Del(id) => {
-            let id_index = entries
-                .iter()
-                .position(|e| e.id == id)
-                .expect("No entry with index"); // Error handle here
+        Command::Del(ids) => {
+            for id in ids {
+                let id_index = entries
+                    .iter()
+                    .position(|e| e.id == id)
+                    .expect("No entry with index"); // Error handle here
 
-            print!("Deleting entry: ");
-            entries[id_index].print(&cfg);
-            entries.remove(id_index);
+                print!("Deleting entry: ");
+                entries[id_index].print(&cfg);
+                entries.remove(id_index);
+            }
         }
 
         Command::List => {
